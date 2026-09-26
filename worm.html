@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Worm</title>
+  <style>
+    :root {
+      --bg: #f1f5f9;
+      --panel: #ffffff;
+      --accent: #0ea5e9;
+      --worm: #0284c7;
+      --worm-head: #075985;
+      --food: #db2777;
+      --text: #0f172a;
+      --muted: #64748b;
+      --grid-line: #cbd5e1;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      align-items: safe center;
+      justify-content: safe center;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: radial-gradient(circle at 30% 20%, #e2e8f0 0%, var(--bg) 70%);
+      color: var(--text);
+      padding: 0.5rem;
+      touch-action: none;
+    }
+
+    .app {
+      width: 100%;
+      max-width: min(480px, 95vw);
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      height: 100dvh;
+      padding: 0.5rem 0;
+      gap: 0.4rem;
+    }
+
+    h1 {
+      font-size: 1.3rem;
+      letter-spacing: 0.05em;
+    }
+
+    .subtitle { color: var(--muted); font-size: 0.75rem; }
+
+    .status {
+      font-size: 0.9rem;
+      font-weight: 600;
+      min-height: 1.4em;
+    }
+    .status .score-val { color: var(--accent); font-weight: 700; }
+
+    .board-wrap {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      container-type: size;
+    }
+
+    .board {
+      position: relative;
+      width: min(100cqw, 100cqh);
+      aspect-ratio: 1;
+      background: var(--panel);
+      border: 3px solid var(--grid-line);
+      border-radius: 14px;
+      overflow: hidden;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.75rem;
+      background: rgba(241, 245, 249, 0.92);
+      backdrop-filter: blur(2px);
+      transition: opacity 0.2s;
+    }
+    .overlay.hidden { opacity: 0; pointer-events: none; }
+    .overlay h2 { font-size: 1.4rem; }
+    .overlay p { color: var(--muted); font-size: 0.85rem; }
+
+    .scoreboard {
+      display: flex;
+      justify-content: space-around;
+      font-size: 0.8rem;
+    }
+    .score { display: flex; flex-direction: column; gap: 0.1rem; }
+    .score .label { color: var(--muted); font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    .score .value { font-size: 1.1rem; font-weight: 700; }
+    .score .value.best { color: var(--accent); }
+
+    .controls { display: flex; gap: 0.6rem; justify-content: center; flex-shrink: 0; }
+
+    button.btn {
+      background: var(--accent);
+      color: #ffffff;
+      border: none;
+      padding: 0.5rem 1.1rem;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s;
+    }
+    button.btn:hover { opacity: 0.9; }
+    button.btn:active { transform: scale(0.97); }
+    button.btn.secondary { background: transparent; color: var(--text); border: 1px solid var(--grid-line); }
+
+    .hint { color: var(--muted); font-size: 0.7rem; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <h1>Worm</h1>
+    <p class="subtitle">Eat the food to grow and score</p>
+
+    <div class="status" id="status">Score: <span class="score-val" id="score">0</span></div>
+
+    <div class="board-wrap">
+      <div class="board">
+        <canvas id="canvas"></canvas>
+        <div class="overlay" id="overlay">
+          <h2 id="overlayTitle">Ready?</h2>
+          <p id="overlayText">Use arrow keys or swipe to move</p>
+          <button class="btn" id="startBtn">Start Game</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="scoreboard">
+      <div class="score">
+        <span class="label">Score</span>
+        <span class="value" id="scoreDisplay">0</span>
+      </div>
+      <div class="score">
+        <span class="label">Best</span>
+        <span class="value best" id="bestDisplay">0</span>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button class="btn" id="restartBtn">Restart</button>
+      <button class="btn secondary" id="pauseBtn">Pause</button>
+    </div>
+
+    <p class="hint">Arrow keys / WASD / swipe to move &middot; Space to pause</p>
+  </div>
+
+  <script>
+    const GRID = 20;
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const overlay = document.getElementById('overlay');
+    const overlayTitle = document.getElementById('overlayTitle');
+    const overlayText = document.getElementById('overlayText');
+    const startBtn = document.getElementById('startBtn');
+    const restartBtn = document.getElementById('restartBtn');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const scoreEl = document.getElementById('score');
+    const scoreDisplayEl = document.getElementById('scoreDisplay');
+    const bestDisplayEl = document.getElementById('bestDisplay');
+
+    let worm, dir, nextDir, food, score, best, running, paused, loopId;
+
+    best = parseInt(localStorage.getItem('wormBest') || '0', 10);
+    bestDisplayEl.textContent = best;
+
+    function resizeCanvas() {
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    function cellSize() {
+      return canvas.getBoundingClientRect().width / GRID;
+    }
+
+    function init() {
+      const mid = Math.floor(GRID / 2);
+      worm = [
+        { x: mid, y: mid },
+        { x: mid - 1, y: mid },
+        { x: mid - 2, y: mid },
+      ];
+      dir = { x: 1, y: 0 };
+      nextDir = { x: 1, y: 0 };
+      score = 0;
+      scoreEl.textContent = 0;
+      scoreDisplayEl.textContent = 0;
+      placeFood();
+      paused = false;
+      pauseBtn.textContent = 'Pause';
+    }
+
+    function placeFood() {
+      let pos;
+      do {
+        pos = {
+          x: Math.floor(Math.random() * GRID),
+          y: Math.floor(Math.random() * GRID),
+        };
+      } while (worm.some(s => s.x === pos.x && s.y === pos.y));
+      food = pos;
+    }
+
+    function start() {
+      init();
+      running = true;
+      overlay.classList.add('hidden');
+      clearInterval(loopId);
+      loopId = setInterval(tick, 130);
+    }
+
+    function gameOver() {
+      running = false;
+      clearInterval(loopId);
+      if (score > best) {
+        best = score;
+        localStorage.setItem('wormBest', best);
+        bestDisplayEl.textContent = best;
+      }
+      overlayTitle.textContent = 'Game Over!';
+      overlayText.textContent = `You scored ${score} point${score !== 1 ? 's' : ''}`;
+      startBtn.textContent = 'Play Again';
+      overlay.classList.remove('hidden');
+    }
+
+    function tick() {
+      if (paused || !running) return;
+
+      dir = nextDir;
+      const head = { x: worm[0].x + dir.x, y: worm[0].y + dir.y };
+
+      // Wall collision
+      if (head.x < 0 || head.x >= GRID || head.y < 0 || head.y >= GRID) {
+        gameOver();
+        return;
+      }
+
+      // Self collision
+      if (worm.some(s => s.x === head.x && s.y === head.y)) {
+        gameOver();
+        return;
+      }
+
+      worm.unshift(head);
+
+      // Eat food
+      if (head.x === food.x && head.y === food.y) {
+        score++;
+        scoreEl.textContent = score;
+        scoreDisplayEl.textContent = score;
+        placeFood();
+      } else {
+        worm.pop();
+      }
+
+      draw();
+    }
+
+    function draw() {
+      const rect = canvas.getBoundingClientRect();
+      const cs = cellSize();
+
+      ctx.clearRect(0, 0, rect.width, rect.height);
+
+      // Food
+      ctx.fillStyle = getCssVar('--food');
+      ctx.beginPath();
+      ctx.arc(food.x * cs + cs / 2, food.y * cs + cs / 2, cs * 0.35, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Worm
+      worm.forEach((seg, i) => {
+        ctx.fillStyle = i === 0 ? getCssVar('--worm-head') : getCssVar('--worm');
+        const pad = cs * 0.08;
+        roundRect(ctx, seg.x * cs + pad, seg.y * cs + pad, cs - pad * 2, cs - pad * 2, cs * 0.2);
+        ctx.fill();
+      });
+    }
+
+    function roundRect(ctx, x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r);
+      ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r);
+      ctx.arcTo(x, y, x + w, y, r);
+      ctx.closePath();
+    }
+
+    function getCssVar(name) {
+      return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    }
+
+    function setDirection(x, y) {
+      // Prevent reversing
+      if (dir.x === -x && dir.y === -y) return;
+      nextDir = { x, y };
+    }
+
+    // Keyboard
+    document.addEventListener('keydown', (e) => {
+      const key = e.key.toLowerCase();
+      if (key === 'arrowup' || key === 'w') { setDirection(0, -1); e.preventDefault(); }
+      else if (key === 'arrowdown' || key === 's') { setDirection(0, 1); e.preventDefault(); }
+      else if (key === 'arrowleft' || key === 'a') { setDirection(-1, 0); e.preventDefault(); }
+      else if (key === 'arrowright' || key === 'd') { setDirection(1, 0); e.preventDefault(); }
+      else if (key === ' ') { togglePause(); e.preventDefault(); }
+    });
+
+    // Touch / swipe
+    let touchStart = null;
+    canvas.addEventListener('touchstart', (e) => {
+      touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    }, { passive: true });
+
+    canvas.addEventListener('touchend', (e) => {
+      if (!touchStart) return;
+      const dx = e.changedTouches[0].clientX - touchStart.x;
+      const dy = e.changedTouches[0].clientY - touchStart.y;
+      if (Math.abs(dx) > Math.abs(dy)) {
+        setDirection(dx > 0 ? 1 : -1, 0);
+      } else {
+        setDirection(0, dy > 0 ? 1 : -1);
+      }
+      touchStart = null;
+    }, { passive: true });
+
+    function togglePause() {
+      if (!running) return;
+      paused = !paused;
+      pauseBtn.textContent = paused ? 'Resume' : 'Pause';
+      if (paused) {
+        overlayTitle.textContent = 'Paused';
+        overlayText.textContent = 'Press Space or Resume to continue';
+        startBtn.textContent = 'Resume';
+        overlay.classList.remove('hidden');
+      } else {
+        overlay.classList.add('hidden');
+      }
+    }
+
+    startBtn.addEventListener('click', () => {
+      if (paused) {
+        togglePause();
+      } else {
+        start();
+      }
+    });
+    restartBtn.addEventListener('click', start);
+    pauseBtn.addEventListener('click', togglePause);
+
+    // Initial setup
+    window.addEventListener('resize', () => {
+      resizeCanvas();
+      if (worm) draw();
+    });
+
+    resizeCanvas();
+    init();
+    draw();
+  </script>
+</body>
+</html>
