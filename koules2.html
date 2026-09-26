@@ -1860,16 +1860,17 @@ function showLevelIntro() {
   if (newIntro) {
     // New type introduction — show icon + name + description
     const info = TYPE_INFO[newIntro.type];
-    const ic = introIcon.getContext('2d');
-    ic.clearRect(0, 0, 80, 80);
-    ic.save();
-    ic.translate(40, 40);
-    ic.scale(1.6, 1.6);
-    ic.translate(-24, -24);
-    drawLegendIcon(ic, newIntro.type, info);
-    ic.restore();
-
-    introIcon.style.display = 'block';
+    try {
+      const ic = introIcon.getContext('2d');
+      ic.clearRect(0, 0, 80, 80);
+      ic.save();
+      ic.translate(40, 40);
+      ic.scale(1.6, 1.6);
+      ic.translate(-24, -24);
+      drawLegendIcon(ic, newIntro.type, info);
+      ic.restore();
+      introIcon.style.display = 'block';
+    } catch(e) { console.error('drawLegendIcon in intro error:', e); }
     introBadge.textContent = newIntro.isHole ? 'NEW HAZARD' : 'NEW ENEMY';
     introBadge.style.display = 'block';
 
@@ -2001,8 +2002,9 @@ function nextLevel() {
     gameOver(true);
     return;
   }
+  physicsAccumulator = 0;
   initLevel();
-  showLevelIntro();
+  try { showLevelIntro(); } catch(e) { console.error('showLevelIntro error:', e); }
   if (gameMode === 'timeattack') levelStartTime = performance.now();
 }
 
@@ -2021,8 +2023,9 @@ function start() {
   menuOverlay.classList.add('hidden');
   gameOverOverlay.classList.add('hidden');
   hud.style.display = 'flex';
+  physicsAccumulator = 0;
   initLevel();
-  showLevelIntro();
+  try { showLevelIntro(); } catch(e) { console.error('showLevelIntro error:', e); }
   if (gameMode === 'timeattack') levelStartTime = performance.now();
   if (gameMode === 'survival') {
     survivalTimer = 0;
@@ -2056,6 +2059,7 @@ function startSandbox() {
   menuOverlay.classList.add('hidden');
   hud.style.display = 'flex';
   objects = [];
+  physicsAccumulator = 0;
   const player = makeObject(ROCKET, ARENA_W / 2, ARENA_H / 2);
   player.M *= 2;
   objects.push(player);
