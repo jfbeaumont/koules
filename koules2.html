@@ -44,6 +44,7 @@
   }
   .hud-section { display: flex; gap: 1.2rem; align-items: center; }
   .hud-item { display: flex; flex-direction: column; align-items: center; }
+  .pu-badge { font-size: 0.85rem; font-weight: bold; padding: 0.2rem 0.5rem; border-radius: 4px; background: rgba(15,15,37,0.8); border: 1px solid #2a2a50; text-shadow: 0 0 6px currentColor; }
   .hud-label { font-size: 0.6rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; }
   .hud-value { font-size: 1.1rem; font-weight: bold; color: var(--accent); text-shadow: 0 0 8px var(--accent); }
   .hud-value.danger { color: var(--danger); text-shadow: 0 0 8px var(--danger); }
@@ -167,7 +168,9 @@
       <div class="hud-item"><span class="hud-label">Score</span><span class="hud-value" id="hudScore">0</span></div>
       <div class="hud-item"><span class="hud-label">Level</span><span class="hud-value success" id="hudLevel">1</span></div>
       <div class="hud-item"><span class="hud-label">Lives</span><span class="hud-value danger" id="hudLives">3</span></div>
+      <div class="hud-item" id="hudTimer" style="display:none"><span class="hud-label">Time</span><span class="hud-value" id="hudTimerVal">0.0s</span></div>
     </div>
+    <div class="hud-section" id="hudPowerups"></div>
     <div class="hud-section">
       <button class="hud-btn" id="hudPause">Pause</button>
       <button class="hud-btn" id="hudLegend">?</button>
@@ -209,7 +212,8 @@
         <p>Speedrun for best time</p>
       </div>
     </div>
-    <p class="hint" style="margin-top:1.5rem">Arrow keys / WASD / joystick to move</p>
+    <p class="hint" style="margin-top:1.5rem">Arrow keys / WASD / joystick to move · Space to pause</p>
+    <p class="hint" style="margin-top:0.3rem;font-size:0.7rem">Sandbox: press 1-9 to spawn balls, H/E/P/C/F/I/R/U/N for special types</p>
   </div>
 
   <!-- Level intro -->
@@ -286,6 +290,9 @@ const BOMB = 20, SPLIT = 21, GRAV = 22, MAG = 23, SPRING = 24;
 const FIELD = 25, SWITCH = 26, GHOST = 27, CHAIN = 28, TIME = 29;
 const MINE = 30, PORTAL = 31, ICE = 32, FIRE = 33, BOSS = 34;
 const WALL = 40, GATE = 41, BOOST = 42, LAVA = 43, ICEZONE = 44, VOID = 45;
+// Powerup types
+const PU_SHIELD = 50, PU_MULTI = 51, PU_FREEZE = 52, PU_MAGNET = 53, PU_TIME = 54, PU_BLAST = 55;
+const ALL_POWERUPS = [PU_SHIELD, PU_MULTI, PU_FREEZE, PU_MAGNET, PU_TIME, PU_BLAST];
 
 // Type metadata: name, color, dark, radius, mass, description
 const TYPE_INFO = {
@@ -312,6 +319,18 @@ const TYPE_INFO = {
   [APPLE]:    { name: 'Apple',      color: '#f8f800', dark: '#404000', radius: 32, mass: 40,   desc: 'Bonus target. Worth big points.' },
   [INSPECTOR]:{ name: 'Inspector',  color: '#f8f8f8', dark: '#404040', radius: 14, mass: 2,    desc: 'Cannot be destroyed directly. Stops on collision.' },
   [LUNATIC]:  { name: 'Lunatic',    color: '#f8f800', dark: '#404000', radius: 6,  mass: 3.14, desc: 'Erratic movement. Attracts player on collision.' },
+  [WALL]:     { name: 'Wall',       color: '#4466aa', dark: '#1a2244', radius: 20, mass: 99999,desc: 'Static barrier. Some can be destroyed by bombs.' },
+  [GATE]:     { name: 'Gate',       color: '#6688cc', dark: '#223355', radius: 20, mass: 99999,desc: 'Sliding door. Opens when linked switch is activated.' },
+  [BOOST]:    { name: 'Boost Pad',  color: '#00ff44', dark: '#003311', radius: 20, mass: 99999,desc: 'Accelerates objects in a fixed direction.' },
+  [LAVA]:     { name: 'Lava',       color: '#ff3300', dark: '#440800', radius: 20, mass: 99999,desc: 'Hazard zone. Damages and destroys objects over time.' },
+  [ICEZONE]:  { name: 'Ice Zone',   color: '#88ddff', dark: '#113344', radius: 20, mass: 99999,desc: 'Low friction zone. Objects slide freely.' },
+  [VOID]:     { name: 'Void',       color: '#660066', dark: '#110011', radius: 20, mass: 99999,desc: 'Instant destroy zone. Anything entering is annihilated.' },
+  [PU_SHIELD]:{ name: 'Shield',     color: '#00aaff', dark: '#001530', radius: 12, mass: 1,    desc: 'Temporary invincibility for 5 seconds.' },
+  [PU_MULTI]: { name: 'Multi',      color: '#ff00ff', dark: '#300030', radius: 12, mass: 1,    desc: 'Splits player into 3 mini-players for 10 seconds.' },
+  [PU_FREEZE]:{ name: 'Freeze',     color: '#aaddff', dark: '#203040', radius: 12, mass: 1,    desc: 'Freezes all enemies for 3 seconds.' },
+  [PU_MAGNET]:{ name: 'Magnet',     color: '#ff8800', dark: '#402000', radius: 12, mass: 1,    desc: 'Pulls all powerups toward player for 5 seconds.' },
+  [PU_TIME]:  { name: 'Time Slow',  color: '#ff00cc', dark: '#400030', radius: 12, mass: 1,    desc: 'Slows time for 5 seconds. Player moves at normal speed.' },
+  [PU_BLAST]: { name: 'Blast',      color: '#ff0000', dark: '#400000', radius: 12, mass: 1,    desc: 'Clears all enemies on screen. Rare!' },
 };
 
 // ============================================================
@@ -329,6 +348,22 @@ let timeScale = 1; // for slow-mo effects
 let screenShake = 0;
 let screenFlash = 0;
 let screenFlashColor = '#ffffff';
+
+// Powerup effects (timers in frames at 60fps)
+let activeEffects = { shield: 0, multi: 0, freeze: 0, magnet: 0, timeslow: 0 };
+let powerupSpawnTimer = 600; // frames until next powerup spawn
+let enemyTimeScale = 1; // multiplier for enemy forces (time slow powerup)
+let miniPlayers = []; // extra player objects for MULTI
+
+// Survival mode
+let survivalTimer = 0;
+let survivalDifficulty = 1;
+let survivalSpawnTimer = 0;
+
+// Time attack
+let levelStartTime = 0;
+let levelClearTime = 0;
+let levelBestTimes = {};
 
 // Objects and particles
 let objects = [];
@@ -575,6 +610,36 @@ function makeObject(type, x, y) {
     case ICE:
       obj.data.friction = 0.98;
       break;
+    case WALL:
+      obj.data.w = 60; obj.data.h = 16;
+      obj.data.destroyable = false;
+      break;
+    case GATE:
+      obj.data.w = 60; obj.data.h = 16;
+      obj.data.open = false;
+      obj.data.openAmount = 0; // 0=closed, 1=fully open
+      obj.data.linkedSwitch = -1;
+      break;
+    case BOOST:
+      obj.data.w = 50; obj.data.h = 50;
+      obj.data.angle = 0; // direction in radians
+      obj.data.power = 2.5;
+      break;
+    case LAVA:
+      obj.data.w = 80; obj.data.h = 80;
+      obj.data.damageTimer = 0;
+      break;
+    case ICEZONE:
+      obj.data.w = 80; obj.data.h = 80;
+      break;
+    case VOID:
+      obj.data.w = 60; obj.data.h = 60;
+      break;
+    case PU_SHIELD: case PU_MULTI: case PU_FREEZE:
+    case PU_MAGNET: case PU_TIME: case PU_BLAST:
+      obj.data.bobOffset = Math.random() * Math.PI * 2;
+      obj.data.spawnLife = 600; // 10 seconds before despawning
+      break;
   }
   return obj;
 }
@@ -585,6 +650,36 @@ function makeObject(type, x, y) {
 function normalize(x, y, size) {
   const len = Math.sqrt(x * x + y * y) || 1;
   return { x: x * size / len, y: y * size / len };
+}
+
+function isStaticElement(type) {
+  return type === WALL || type === GATE || type === BOOST ||
+         type === LAVA || type === ICEZONE || type === VOID;
+}
+
+function isPowerup(type) {
+  return type === PU_SHIELD || type === PU_MULTI || type === PU_FREEZE ||
+         type === PU_MAGNET || type === PU_TIME || type === PU_BLAST;
+}
+
+function isEnemy(type) {
+  return type === BALL || type === BBALL || type === BOMB || type === SPLIT ||
+         type === GRAV || type === MAG || type === SPRING || type === FIELD ||
+         type === GHOST || type === CHAIN || type === TIME || type === MINE ||
+         type === PORTAL || type === ICE || type === FIRE || type === INSPECTOR ||
+         type === LUNATIC || type === SWITCH || type === BOSS;
+}
+
+function pointInRect(px, py, rx, ry, rw, rh) {
+  return px >= rx - rw/2 && px <= rx + rw/2 && py >= ry - rh/2 && py <= ry + rh/2;
+}
+
+function circleRectOverlap(cx, cy, cr, rx, ry, rw, rh) {
+  const closestX = Math.max(rx - rw/2, Math.min(cx, rx + rw/2));
+  const closestY = Math.max(ry - rh/2, Math.min(cy, ry + rh/2));
+  const dx = cx - closestX;
+  const dy = cy - closestY;
+  return dx * dx + dy * dy < cr * cr;
 }
 
 function findPosition(r) {
@@ -626,6 +721,37 @@ function updateForces() {
 
     // CREATOR countdown
     if (obj.type === CREATOR) continue;
+
+    // Static elements: no forces, but handle animations
+    if (isStaticElement(obj.type)) {
+      if (obj.type === GATE) {
+        const target = obj.data.open ? 1 : 0;
+        obj.data.openAmount += (target - obj.data.openAmount) * 0.1;
+      }
+      continue;
+    }
+
+    // Environment switches: stationary, no forces
+    if (obj.type === SWITCH && obj.data.environment) continue;
+
+    // Powerups: bob, despawn, magnet attraction
+    if (isPowerup(obj.type)) {
+      obj.data.bobOffset = (obj.data.bobOffset || 0) + 0.05;
+      obj.data.spawnLife--;
+      if (obj.data.spawnLife <= 0) { obj.live = false; continue; }
+      if (activeEffects.magnet > 0 && player.live) {
+        const dx = player.x - obj.x, dy = player.y - obj.y;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        if (dist > 5) {
+          const n = normalize(dx, dy, 2.5);
+          obj.fx += n.x;
+          obj.fy += n.y;
+        }
+      }
+      obj.fx *= 0.9;
+      obj.fy *= 0.9;
+      continue;
+    }
 
     // Player input
     if (obj.type === ROCKET) {
@@ -796,9 +922,67 @@ function updateForces() {
       obj.frozen--;
     }
 
+    // Environment zone effects
+    let inIceZone = false;
+    if (obj.type !== HOLE && obj.type !== EHOLE) {
+      for (const zone of objects) {
+        if (!zone.live || !isStaticElement(zone.type)) continue;
+        if (zone.type === BOOST) {
+          if (pointInRect(obj.x, obj.y, zone.x, zone.y, zone.data.w, zone.data.h)) {
+            obj.fx += Math.cos(zone.data.angle) * zone.data.power;
+            obj.fy += Math.sin(zone.data.angle) * zone.data.power;
+          }
+        } else if (zone.type === LAVA) {
+          if (circleRectOverlap(obj.x, obj.y, obj.radius, zone.x, zone.y, zone.data.w, zone.data.h)) {
+            if (obj.type === ROCKET) {
+              if (activeEffects.shield <= 0) {
+                obj.data.lavaDamage = (obj.data.lavaDamage || 0) + 1;
+                if (obj.data.lavaDamage > 40) {
+                  obj.lives--;
+                  obj.data.lavaDamage = 0;
+                  flash('#ff3300', 0.3);
+                  if (obj.lives <= 0) {
+                    lives--;
+                    updateUI();
+                    if (lives <= 0) { destroyObject(obj); gameOver(false); return; }
+                    obj.x = ARENA_W/2; obj.y = ARENA_H/2; obj.fx = 0; obj.fy = 0;
+                    obj.time = 100; obj.lives = 5;
+                  }
+                }
+              }
+            } else if (isEnemy(obj.type) && obj.type !== BOSS) {
+              obj.health -= 0.02;
+              if (obj.health <= 0) { destroyObject(obj); score += 5; updateUI(); }
+            }
+            if (Math.random() < 0.2) {
+              spawnParticle(obj.x + (Math.random()-0.5)*obj.radius, obj.y,
+                (Math.random()-0.5)*2, -Math.random()*2-1, 25, '#ff6600', 2+Math.random()*2, true);
+            }
+          }
+        } else if (zone.type === ICEZONE) {
+          if (circleRectOverlap(obj.x, obj.y, obj.radius, zone.x, zone.y, zone.data.w, zone.data.h)) {
+            inIceZone = true;
+          }
+        } else if (zone.type === VOID) {
+          if (circleRectOverlap(obj.x, obj.y, obj.radius, zone.x, zone.y, zone.data.w, zone.data.h)) {
+            if (!(obj.type === ROCKET && activeEffects.shield > 0)) {
+              destroyObject(obj);
+              spawnExplosion(obj.x, obj.y, 10, '#660066');
+              if (obj.type === ROCKET) {
+                lives--;
+                updateUI();
+                if (lives <= 0) { gameOver(false); return; }
+              }
+            }
+          }
+        }
+      }
+    }
+
     // Apply friction (ICE has less friction)
     let friction = SLOWDOWN;
     if (obj.type === ICE || obj.type === SPRING) friction = 0.97;
+    if (inIceZone) friction = 0.99;
     obj.fx *= friction;
     obj.fy *= friction;
   }
@@ -832,10 +1016,21 @@ function moveObjects() {
       continue;
     }
 
+    // Static elements don't move
+    if (isStaticElement(obj.type)) continue;
+    // Environment switches don't move
+    if (obj.type === SWITCH && obj.data.environment) continue;
+
     if (obj.type === HOLE) continue;
 
-    obj.x += obj.fx * moveMul;
-    obj.y += obj.fy * moveMul;
+    let mul = moveMul;
+    // Time slow powerup: enemies move slower, player normal
+    if (enemyTimeScale < 1 && isEnemy(obj.type)) {
+      mul *= enemyTimeScale;
+    }
+
+    obj.x += obj.fx * mul;
+    obj.y += obj.fy * mul;
 
     // Trail for certain types
     if (obj.type === FIRE || obj.type === GHOST || obj.type === BOSS) {
@@ -856,6 +1051,13 @@ function collisions() {
       // GHOST: pass through when not solid
       if (a.type === GHOST && !a.data.solid) continue;
       if (b.type === GHOST && !b.data.solid) continue;
+
+      // Skip static elements and powerups (handled separately)
+      if (isStaticElement(a.type) || isStaticElement(b.type)) continue;
+      if (isPowerup(a.type) || isPowerup(b.type)) continue;
+      // Skip environment switches (handled in handleWallCollisions)
+      if (a.type === SWITCH && a.data.environment) continue;
+      if (b.type === SWITCH && b.data.environment) continue;
 
       const dx = b.x - a.x;
       const dy = b.y - a.y;
@@ -920,11 +1122,12 @@ function collisions() {
         else if (a.type === LUNATIC) gummFactor = -TYPE_INFO[LUNATIC].mass / ROCKETM;
 
         const cheatOn = cheatMode && (a.type === ROCKET || b.type === ROCKET);
+        const shieldOn = activeEffects.shield > 0;
         const force = GUMM * (cheatOn ? 2 : 1);
         const fa = normalize(nx, ny, force / gummFactor);
         const fb = normalize(nx, ny, force * gummFactor);
-        const aMul = (cheatOn && a.type === ROCKET) ? 0.1 : 1;
-        const bMul = (cheatOn && b.type === ROCKET) ? 0.1 : 1;
+        const aMul = (cheatOn && a.type === ROCKET) ? 0.1 : (shieldOn && a.type === ROCKET) ? 0 : 1;
+        const bMul = (cheatOn && b.type === ROCKET) ? 0.1 : (shieldOn && b.type === ROCKET) ? 0 : 1;
         a.fx -= fa.x * aMul;
         a.fy -= fa.y * aMul;
         b.fx += fb.x * bMul;
@@ -1052,13 +1255,21 @@ function checkLimits() {
     if (!obj.live) continue;
     if (obj.type === HOLE || obj.type === EHOLE || obj.type === CREATOR) continue;
     if (obj.type === MINE) continue; // stationary
+    if (obj.type === SWITCH && obj.data.environment) continue; // env switches stationary
+    if (isStaticElement(obj.type)) continue; // walls, gates, zones don't fall off
+    if (isPowerup(obj.type)) continue; // powerups float
 
     const out = obj.x - obj.radius < 0 || obj.x + obj.radius > ARENA_W ||
                 obj.y - obj.radius < 0 || obj.y + obj.radius > ARENA_H;
 
     if (out) {
       if (obj.type === ROCKET) {
-        if (obj.time > 0) {
+        if (obj.data.isMini) {
+          // Mini players just get destroyed when they fall off
+          destroyObject(obj);
+          continue;
+        }
+        if (obj.time > 0 || activeEffects.shield > 0) {
           obj.x = Math.max(obj.radius, Math.min(ARENA_W - obj.radius, obj.x));
           obj.y = Math.max(obj.radius, Math.min(ARENA_H - obj.radius, obj.y));
           obj.fx *= -0.5; obj.fy *= -0.5;
@@ -1094,8 +1305,219 @@ function checkLimits() {
 }
 
 // ============================================================
-// LEVEL SYSTEM
+// POWERUP SYSTEM
 // ============================================================
+function activatePowerup(type) {
+  switch (type) {
+    case PU_SHIELD:
+      activeEffects.shield = 300; // 5 seconds at 60fps
+      flash('#00aaff', 0.3);
+      break;
+    case PU_MULTI:
+      activeEffects.multi = 600; // 10 seconds
+      spawnMiniPlayers();
+      flash('#ff00ff', 0.3);
+      break;
+    case PU_FREEZE:
+      activeEffects.freeze = 180; // 3 seconds
+      for (const obj of objects) {
+        if (obj.live && isEnemy(obj.type)) obj.frozen = 180;
+      }
+      flash('#aaddff', 0.4);
+      break;
+    case PU_MAGNET:
+      activeEffects.magnet = 300; // 5 seconds
+      flash('#ff8800', 0.3);
+      break;
+    case PU_TIME:
+      activeEffects.timeslow = 300; // 5 seconds
+      enemyTimeScale = 0.3;
+      flash('#ff00cc', 0.3);
+      break;
+    case PU_BLAST:
+      for (const obj of objects) {
+        if (obj.live && isEnemy(obj.type) && obj.type !== BOSS &&
+            !(obj.type === SWITCH && obj.data.environment)) {
+          destroyObject(obj);
+          score += 10;
+        }
+      }
+      flash('#ff0000', 0.6);
+      shake(20);
+      break;
+  }
+  updateUI();
+}
+
+function spawnMiniPlayers() {
+  const player = objects[0];
+  if (!player || !player.live) return;
+  for (let i = 0; i < 2; i++) {
+    const angle = (i + 1) * Math.PI * 2 / 3;
+    const mini = makeObject(ROCKET, player.x + Math.cos(angle) * 30, player.y + Math.sin(angle) * 30);
+    mini.data.isMini = true;
+    mini.radius = 10;
+    mini.M = 3;
+    mini.color = '#f8d800';
+    mini.lives = 99;
+    mini.time = 0;
+    objects.push(mini);
+    miniPlayers.push(mini);
+  }
+}
+
+function removeMiniPlayers() {
+  for (const mini of miniPlayers) {
+    if (mini.live) {
+      spawnExplosion(mini.x, mini.y, 8, '#f8d800');
+      mini.live = false;
+    }
+  }
+  miniPlayers = [];
+}
+
+function updatePowerupEffects() {
+  if (activeEffects.shield > 0) activeEffects.shield--;
+  if (activeEffects.magnet > 0) activeEffects.magnet--;
+  if (activeEffects.timeslow > 0) {
+    activeEffects.timeslow--;
+    if (activeEffects.timeslow <= 0) enemyTimeScale = 1;
+  }
+  if (activeEffects.freeze > 0) activeEffects.freeze--;
+  if (activeEffects.multi > 0) {
+    activeEffects.multi--;
+    if (activeEffects.multi <= 0) removeMiniPlayers();
+  }
+}
+
+function spawnPowerup() {
+  let type = ALL_POWERUPS[Math.floor(Math.random() * ALL_POWERUPS.length)];
+  // BLAST is rare — 80% chance to reroll to something else
+  if (type === PU_BLAST && Math.random() > 0.2) {
+    type = ALL_POWERUPS[Math.floor(Math.random() * 5)];
+  }
+  const pos = findPosition(12);
+  if (!pos) return;
+  const pu = makeObject(type, pos.x, pos.y);
+  objects.push(pu);
+  spawnExplosion(pos.x, pos.y, 6, TYPE_INFO[type].color);
+}
+
+function handleWallCollisions() {
+  for (const obj of objects) {
+    if (!obj.live || isStaticElement(obj.type) || obj.type === HOLE ||
+        obj.type === EHOLE || obj.type === CREATOR || isPowerup(obj.type)) continue;
+    for (const wall of objects) {
+      if (!wall.live) continue;
+      const isWall = wall.type === WALL || wall.type === GATE;
+      const isEnvSwitch = wall.type === SWITCH && wall.data.environment;
+      if (!isWall && !isEnvSwitch) continue;
+      // Gate: skip collision when open
+      if (wall.type === GATE && wall.data.openAmount > 0.5) continue;
+
+      if (isEnvSwitch) {
+        // Circular collision for environment switches
+        const dx = obj.x - wall.x, dy = obj.y - wall.y;
+        const distSq = dx * dx + dy * dy;
+        const rSum = obj.radius + wall.radius;
+        if (distSq < rSum * rSum) {
+          const dist = Math.sqrt(distSq) || 0.01;
+          const nx = dx / dist, ny = dy / dist;
+          const overlap = rSum - dist;
+          obj.x += nx * overlap;
+          obj.y += ny * overlap;
+          const dot = obj.fx * nx + obj.fy * ny;
+          if (dot < 0) {
+            obj.fx -= 2 * dot * nx * 0.8;
+            obj.fy -= 2 * dot * ny * 0.8;
+          }
+        }
+        continue;
+      }
+
+      // Rectangular collision for walls/gates
+      const w = wall.data.w, h = wall.data.h;
+      const closestX = Math.max(wall.x - w/2, Math.min(obj.x, wall.x + w/2));
+      const closestY = Math.max(wall.y - h/2, Math.min(obj.y, wall.y + h/2));
+      const dx = obj.x - closestX;
+      const dy = obj.y - closestY;
+      const distSq = dx * dx + dy * dy;
+      if (distSq < obj.radius * obj.radius) {
+        const dist = Math.sqrt(distSq) || 0.01;
+        const nx = dx / dist;
+        const ny = dy / dist;
+        const overlap = obj.radius - dist;
+        obj.x += nx * overlap;
+        obj.y += ny * overlap;
+        // Bounce
+        const dot = obj.fx * nx + obj.fy * ny;
+        if (dot < 0) {
+          obj.fx -= 2 * dot * nx * 0.8;
+          obj.fy -= 2 * dot * ny * 0.8;
+        }
+        // BOMB: explode on wall hit (destroys destroyable walls)
+        if (obj.type === BOMB && wall.data.destroyable) {
+          explode(obj, 60, 10);
+          destroyObject(obj);
+          destroyObject(wall);
+          break;
+        }
+        spawnExplosion(closestX, closestY, 2, '#ffffff', 0.3);
+      }
+    }
+  }
+}
+
+function handlePowerupPickup() {
+  const player = objects[0];
+  if (!player || !player.live) return;
+  for (const obj of objects) {
+    if (!obj.live || !isPowerup(obj.type)) continue;
+    const dx = obj.x - player.x, dy = obj.y - player.y;
+    const distSq = dx * dx + dy * dy;
+    const rSum = player.radius + obj.radius;
+    if (distSq < rSum * rSum) {
+      activatePowerup(obj.type);
+      obj.live = false;
+      spawnExplosion(obj.x, obj.y, 12, obj.color);
+      Effect(2);
+    }
+  }
+}
+
+function handleSwitches() {
+  for (const sw of objects) {
+    if (!sw.live || sw.type !== SWITCH) continue;
+    let touched = false;
+    for (const other of objects) {
+      if (!other.live || other === sw) continue;
+      if (other.type === ROCKET || isEnemy(other.type)) {
+        const dx = other.x - sw.x, dy = other.y - sw.y;
+        if (dx * dx + dy * dy < (sw.radius + other.radius) ** 2) {
+          touched = true;
+          break;
+        }
+      }
+    }
+    if (touched && !sw.data.activated) {
+      sw.data.activated = true;
+      for (const gate of objects) {
+        if (gate.live && gate.type === GATE && gate.data.linkedSwitch === sw.id) {
+          gate.data.open = !gate.data.open;
+        }
+      }
+      for (const field of objects) {
+        if (field.live && field.type === FIELD && field.data.linkedSwitch === sw.id) {
+          field.data.active = !field.data.active;
+        }
+      }
+      spawnExplosion(sw.x, sw.y, 8, '#ff8800');
+      Effect(2);
+    } else if (!touched && sw.data.activated) {
+      sw.data.activated = false;
+    }
+  }
+}
 const SECTORS = [
   { name: 'Sector Alpha', subtitle: 'Introduction', levels: [1, 10] },
   { name: 'Sector Beta', subtitle: 'Fields & Forces', levels: [11, 20] },
@@ -1195,7 +1617,79 @@ function initLevel() {
     for (let i = 0; i < holeCount; i++) creator(HOLE);
   }
 
+  // Environment elements
+  initEnvironment(level);
+
   generateStars();
+}
+
+function initEnvironment(lvl) {
+  // Walls/barriers in Sector Beta (level 11+)
+  if (lvl >= 11) {
+    const wallCount = Math.min(Math.floor((lvl - 10) / 3), 4);
+    for (let i = 0; i < wallCount; i++) {
+      const horizontal = Math.random() < 0.5;
+      const w = horizontal ? 80 + Math.random() * 60 : 16;
+      const h = horizontal ? 16 : 80 + Math.random() * 60;
+      const x = ARENA_W * 0.2 + Math.random() * ARENA_W * 0.6;
+      const y = ARENA_H * 0.2 + Math.random() * ARENA_H * 0.6;
+      const wall = makeObject(WALL, x, y);
+      wall.data.w = w; wall.data.h = h;
+      wall.data.destroyable = lvl >= 21 && Math.random() < 0.4;
+      objects.push(wall);
+    }
+  }
+
+  // Hazard zones in Sector Gamma (level 21+)
+  if (lvl >= 21) {
+    const hazardCount = Math.min(Math.floor((lvl - 20) / 4), 3);
+    const hazardTypes = [LAVA, ICEZONE, VOID];
+    for (let i = 0; i < hazardCount; i++) {
+      const type = hazardTypes[Math.floor(Math.random() * hazardTypes.length)];
+      const w = 60 + Math.random() * 50;
+      const h = 60 + Math.random() * 50;
+      const x = ARENA_W * 0.15 + Math.random() * ARENA_W * 0.7;
+      const y = ARENA_H * 0.15 + Math.random() * ARENA_H * 0.7;
+      const zone = makeObject(type, x, y);
+      zone.data.w = w; zone.data.h = h;
+      objects.push(zone);
+    }
+  }
+
+  // Boost pads in Sector Delta (level 31+)
+  if (lvl >= 31) {
+    const boostCount = Math.min(Math.floor((lvl - 30) / 5), 3);
+    for (let i = 0; i < boostCount; i++) {
+      const w = 50 + Math.random() * 30;
+      const h = 50 + Math.random() * 30;
+      const x = ARENA_W * 0.2 + Math.random() * ARENA_W * 0.6;
+      const y = ARENA_H * 0.2 + Math.random() * ARENA_H * 0.6;
+      const boost = makeObject(BOOST, x, y);
+      boost.data.w = w; boost.data.h = h;
+      boost.data.angle = Math.random() * Math.PI * 2;
+      objects.push(boost);
+    }
+  }
+
+  // Gates + switches from level 15+
+  if (lvl >= 15 && lvl % 5 === 0) {
+    const gx = ARENA_W * 0.3 + Math.random() * ARENA_W * 0.4;
+    const gy = ARENA_H * 0.3 + Math.random() * ARENA_H * 0.4;
+    const gate = makeObject(GATE, gx, gy);
+    gate.data.w = 60; gate.data.h = 16;
+    gate.data.open = false;
+    gate.data.openAmount = 0;
+    objects.push(gate);
+
+    const sx = ARENA_W * 0.1 + Math.random() * ARENA_W * 0.8;
+    const sy = ARENA_H * 0.1 + Math.random() * ARENA_H * 0.8;
+    const sw = makeObject(SWITCH, sx, sy);
+    sw.data.linkedGate = gate.id;
+    sw.data.activated = false;
+    sw.data.environment = true; // not an enemy to destroy
+    objects.push(sw);
+    gate.data.linkedSwitch = sw.id;
+  }
 }
 
 function showLevelIntro() {
@@ -1216,7 +1710,9 @@ function showLevelIntro() {
 
 function countEnemies() {
   return objects.filter(o => o.live && o.type !== ROCKET && o.type !== HOLE &&
-    o.type !== EHOLE && o.type !== CREATOR && o.type !== APPLE).length;
+    o.type !== EHOLE && o.type !== CREATOR && o.type !== APPLE &&
+    !isStaticElement(o.type) && !isPowerup(o.type) &&
+    !(o.type === SWITCH && o.data.environment)).length;
 }
 
 function countByType(type) {
@@ -1224,6 +1720,41 @@ function countByType(type) {
 }
 
 function updateGame() {
+  if (!running) return;
+
+  // Survival mode: endless, ramping difficulty
+  if (gameMode === 'survival') {
+    survivalTimer++;
+    survivalSpawnTimer--;
+    survivalDifficulty = 1 + survivalTimer / 1800; // ramps up over 30s
+
+    // Score increases over time
+    if (frameCount % 60 === 0) score += Math.floor(survivalDifficulty);
+
+    // Spawn enemies randomly
+    if (survivalSpawnTimer <= 0) {
+      const allTypes = [BALL, BBALL, BOMB, SPLIT, GRAV, MAG, SPRING, GHOST, TIME, ICE, FIRE, MINE, PORTAL, CHAIN];
+      const maxEnemies = Math.min(4 + Math.floor(survivalDifficulty * 2), 15);
+      if (countEnemies() < maxEnemies) {
+        const type = allTypes[Math.floor(Math.random() * allTypes.length)];
+        creator(type);
+      }
+      survivalSpawnTimer = Math.max(30, 120 - survivalDifficulty * 10);
+    }
+
+    // Game over when player dies
+    if (!objects[0] || !objects[0].live) {
+      gameOver(false);
+      return;
+    }
+    return;
+  }
+
+  // Time attack: track level clear time
+  if (gameMode === 'timeattack' && levelStartTime > 0) {
+    // Timer is displayed in updateUI
+  }
+
   if (level === 50) {
     // Final boss level
     if (countByType(BOSS) === 0 && !objects.some(o => o.type === CREATOR && o.ctype === BOSS)) {
@@ -1238,14 +1769,15 @@ function updateGame() {
     }
   } else {
     gtime--;
-    // Level complete when all enemies destroyed
+    // Level complete when all enemies destroyed (include CREATOR objects still transforming)
     const enemiesLeft = objects.filter(o => o.live && (
+      o.type === CREATOR ||
       o.type === BALL || o.type === BBALL || o.type === BOMB || o.type === SPLIT ||
       o.type === GRAV || o.type === MAG || o.type === SPRING || o.type === FIELD ||
       o.type === GHOST || o.type === CHAIN || o.type === TIME || o.type === MINE ||
       o.type === PORTAL || o.type === ICE || o.type === FIRE || o.type === INSPECTOR ||
       o.type === LUNATIC || o.type === SWITCH
-    )).length;
+    ) && !(o.type === SWITCH && o.data.environment)).length;
 
     if (enemiesLeft === 0) {
       nextLevel();
@@ -1265,6 +1797,19 @@ function updateGame() {
 }
 
 function nextLevel() {
+  // Time attack: record clear time
+  if (gameMode === 'timeattack' && levelStartTime > 0) {
+    const clearTime = (performance.now() - levelStartTime) / 1000;
+    const bestKey = 'koules2TimeAttack';
+    let bestTimes = {};
+    try { bestTimes = JSON.parse(localStorage.getItem(bestKey) || '{}'); } catch(e) {}
+    if (!bestTimes[level] || clearTime < bestTimes[level]) {
+      bestTimes[level] = clearTime;
+      localStorage.setItem(bestKey, JSON.stringify(bestTimes));
+    }
+    levelClearTime = clearTime;
+  }
+
   level++;
   score += 20 * lives;
   if (level > 50) {
@@ -1273,6 +1818,7 @@ function nextLevel() {
   }
   initLevel();
   showLevelIntro();
+  if (gameMode === 'timeattack') levelStartTime = performance.now();
 }
 
 function start() {
@@ -1282,12 +1828,22 @@ function start() {
   running = true;
   paused = false;
   gameState = 'playing';
+  activeEffects = {};
+  enemyTimeScale = 1.0;
+  miniPlayers = [];
+  powerupSpawnTimer = 600;
   Effect(0); // S_START
   menuOverlay.classList.add('hidden');
   gameOverOverlay.classList.add('hidden');
   hud.style.display = 'flex';
   initLevel();
   showLevelIntro();
+  if (gameMode === 'timeattack') levelStartTime = performance.now();
+  if (gameMode === 'survival') {
+    survivalTimer = 0;
+    survivalDifficulty = 1;
+    survivalSpawnTimer = 60;
+  }
   lastTime = performance.now();
   requestAnimationFrame(loop);
 }
@@ -1308,6 +1864,10 @@ function startSandbox() {
   running = true;
   paused = false;
   gameState = 'playing';
+  activeEffects = {};
+  enemyTimeScale = 1.0;
+  miniPlayers = [];
+  powerupSpawnTimer = 600;
   menuOverlay.classList.add('hidden');
   hud.style.display = 'flex';
   objects = [];
@@ -1333,6 +1893,10 @@ function gameOver(won) {
   if (won) {
     document.getElementById('gameOverTitle').textContent = 'Victory!';
     document.getElementById('gameOverText').textContent = `You conquered Koules 2! Final score: ${score}`;
+  } else if (gameMode === 'survival') {
+    document.getElementById('gameOverTitle').textContent = 'Survival Ended';
+    const secs = Math.floor(survivalTimer / 60);
+    document.getElementById('gameOverText').textContent = `You survived ${secs}s with score ${score}. Difficulty: ${survivalDifficulty.toFixed(1)}x`;
   } else {
     document.getElementById('gameOverTitle').textContent = 'Game Over';
     document.getElementById('gameOverText').textContent = `You reached level ${level}. Score: ${score}`;
@@ -1355,6 +1919,34 @@ function updateUI() {
   document.getElementById('hudScore').textContent = score;
   document.getElementById('hudLevel').textContent = level;
   document.getElementById('hudLives').textContent = lives;
+
+  // Powerup indicators
+  let puHtml = '';
+  const puNames = { shield: '🛡', multi: '✦', freeze: '❄', magnet: '🧲', timeslow: '⏱' };
+  for (const [key, timer] of Object.entries(activeEffects)) {
+    if (timer > 0 && puNames[key]) {
+      const secs = Math.ceil(timer / 60);
+      puHtml += `<span class="pu-badge" style="color:#${key === 'shield' ? '00aaff' : key === 'multi' ? 'ff00ff' : key === 'freeze' ? '88ddff' : key === 'magnet' ? 'ff8800' : 'ffcc00'}">${puNames[key]} ${secs}s</span>`;
+    }
+  }
+  const puBar = document.getElementById('hudPowerups');
+  if (puBar) puBar.innerHTML = puHtml;
+
+  // Time attack / survival timer
+  const taItem = document.getElementById('hudTimer');
+  const taVal = document.getElementById('hudTimerVal');
+  if (taItem && taVal) {
+    if (gameMode === 'timeattack' && levelStartTime > 0 && running) {
+      const elapsed = (performance.now() - levelStartTime) / 1000;
+      taVal.textContent = elapsed.toFixed(1) + 's';
+      taItem.style.display = 'inline-flex';
+    } else if (gameMode === 'survival' && running) {
+      taVal.textContent = Math.floor(survivalTimer / 60) + 's';
+      taItem.style.display = 'inline-flex';
+    } else {
+      taItem.style.display = 'none';
+    }
+  }
 }
 
 function updateBossBar() {
@@ -1461,6 +2053,40 @@ function drawFieldRadius(obj, color, radius) {
   ctx.globalAlpha = 1;
 }
 
+function drawPowerup(obj) {
+  const r = obj.radius;
+  const bob = Math.sin(obj.data.bobOffset || 0) * 3;
+  const cx = obj.x, cy = obj.y + bob;
+  if (obj.data.spawnLife < 120 && Math.floor(obj.data.spawnLife / 10) % 2 === 0) {
+    ctx.globalAlpha = 0.5;
+  }
+  ctx.shadowBlur = 15;
+  ctx.shadowColor = obj.color;
+  ctx.strokeStyle = obj.color;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.stroke();
+  const grad = ctx.createRadialGradient(cx + r*0.25, cy - r*0.25, 0, cx, cy, r);
+  grad.addColorStop(0, obj.color);
+  grad.addColorStop(0.7, obj.color);
+  grad.addColorStop(1, obj.dark);
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r * 0.7, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 12px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const icons = {};
+  icons[PU_SHIELD] = '🛡'; icons[PU_MULTI] = '✦'; icons[PU_FREEZE] = '❄';
+  icons[PU_MAGNET] = '🧲'; icons[PU_TIME] = '⏱'; icons[PU_BLAST] = '💥';
+  ctx.fillText(icons[obj.type] || '?', cx, cy);
+  ctx.globalAlpha = 1;
+}
+
 function drawObject(obj) {
   if (!obj.live) return;
 
@@ -1534,8 +2160,191 @@ function drawObject(obj) {
       }
       drawSphere(obj);
       break;
+    case WALL: {
+      const w = obj.data.w, h = obj.data.h;
+      const wc = obj.data.destroyable ? '#ff6644' : '#4466aa';
+      const wd = obj.data.destroyable ? '#3a2233' : '#1a2244';
+      ctx.shadowBlur = 10;
+      ctx.shadowColor = wc;
+      ctx.fillStyle = wd;
+      ctx.fillRect(obj.x - w/2, obj.y - h/2, w, h);
+      ctx.strokeStyle = wc;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(obj.x - w/2, obj.y - h/2, w, h);
+      ctx.strokeStyle = wc;
+      ctx.globalAlpha = 0.3;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(obj.x - w/2 + 3, obj.y - h/2 + 3, w - 6, h - 6);
+      ctx.globalAlpha = 1;
+      ctx.shadowBlur = 0;
+      break;
+    }
+    case GATE: {
+      const w = obj.data.w, h = obj.data.h;
+      const openAmt = obj.data.openAmount || 0;
+      const doorW = w * (1 - openAmt) / 2;
+      ctx.shadowBlur = 8;
+      ctx.shadowColor = '#6688cc';
+      if (doorW > 1) {
+        ctx.fillStyle = '#223355';
+        ctx.fillRect(obj.x - w/2, obj.y - h/2, doorW, h);
+        ctx.fillRect(obj.x + w/2 - doorW, obj.y - h/2, doorW, h);
+        ctx.strokeStyle = '#6688cc';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(obj.x - w/2, obj.y - h/2, doorW, h);
+        ctx.strokeRect(obj.x + w/2 - doorW, obj.y - h/2, doorW, h);
+      }
+      ctx.strokeStyle = 'rgba(102,136,204,0.3)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(obj.x - w/2, obj.y - h/2, w, h);
+      ctx.shadowBlur = 0;
+      break;
+    }
+    case BOOST: {
+      const w = obj.data.w, h = obj.data.h;
+      const angle = obj.data.angle;
+      ctx.globalAlpha = 0.2;
+      ctx.fillStyle = '#003311';
+      ctx.fillRect(obj.x - w/2, obj.y - h/2, w, h);
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = '#00ff44';
+      ctx.lineWidth = 2;
+      ctx.shadowBlur = 10;
+      ctx.shadowColor = '#00ff44';
+      ctx.strokeRect(obj.x - w/2, obj.y - h/2, w, h);
+      for (let i = 0; i < 3; i++) {
+        const t = ((frameCount * 0.03 + i / 3) % 1);
+        const ax = obj.x + Math.cos(angle) * (t - 0.5) * w * 0.6;
+        const ay = obj.y + Math.sin(angle) * (t - 0.5) * h * 0.6;
+        ctx.globalAlpha = (1 - t) * 0.7 + 0.3;
+        ctx.fillStyle = '#00ff44';
+        ctx.save();
+        ctx.translate(ax, ay);
+        ctx.rotate(angle);
+        ctx.beginPath();
+        ctx.moveTo(6, 0);
+        ctx.lineTo(-4, -5);
+        ctx.lineTo(-4, 5);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+      ctx.globalAlpha = 1;
+      ctx.shadowBlur = 0;
+      break;
+    }
+    case LAVA: {
+      const w = obj.data.w, h = obj.data.h;
+      ctx.fillStyle = '#220800';
+      ctx.fillRect(obj.x - w/2, obj.y - h/2, w, h);
+      ctx.shadowBlur = 15;
+      ctx.shadowColor = '#ff3300';
+      const grad = ctx.createLinearGradient(obj.x, obj.y - h/2, obj.x, obj.y + h/2);
+      grad.addColorStop(0, '#ff6600');
+      grad.addColorStop(0.5, '#ff3300');
+      grad.addColorStop(1, '#cc1100');
+      ctx.fillStyle = grad;
+      ctx.fillRect(obj.x - w/2, obj.y - h/2, w, h);
+      for (let i = 0; i < 4; i++) {
+        const bx = obj.x - w/2 + ((frameCount * 0.5 + i * 73) % w);
+        const by = obj.y - h/2 + ((frameCount * 0.3 + i * 47) % h);
+        const br = 3 + Math.sin(frameCount * 0.1 + i) * 2;
+        ctx.globalAlpha = 0.5;
+        ctx.fillStyle = '#ffaa00';
+        ctx.beginPath();
+        ctx.arc(bx, by, br, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = '#ff3300';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(obj.x - w/2, obj.y - h/2, w, h);
+      ctx.shadowBlur = 0;
+      if (Math.random() < 0.3) {
+        spawnParticle(obj.x - w/2 + Math.random() * w, obj.y - h/2 + Math.random() * h,
+          (Math.random()-0.5)*1, -Math.random()*2-0.5, 30, '#ff6600', 2+Math.random()*2, true);
+      }
+      break;
+    }
+    case ICEZONE: {
+      const w = obj.data.w, h = obj.data.h;
+      ctx.globalAlpha = 0.2;
+      ctx.fillStyle = '#88ddff';
+      ctx.fillRect(obj.x - w/2, obj.y - h/2, w, h);
+      ctx.globalAlpha = 0.5;
+      ctx.strokeStyle = '#aaddff';
+      ctx.lineWidth = 2;
+      ctx.shadowBlur = 8;
+      ctx.shadowColor = '#88ddff';
+      ctx.strokeRect(obj.x - w/2, obj.y - h/2, w, h);
+      ctx.globalAlpha = 0.15;
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 3; i++) {
+        const cx = obj.x - w/4 + i * w/4;
+        const cy = obj.y;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - 8); ctx.lineTo(cx, cy + 8);
+        ctx.moveTo(cx - 6, cy - 4); ctx.lineTo(cx + 6, cy + 4);
+        ctx.moveTo(cx + 6, cy - 4); ctx.lineTo(cx - 6, cy + 4);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      ctx.shadowBlur = 0;
+      break;
+    }
+    case VOID: {
+      const w = obj.data.w, h = obj.data.h;
+      const grad = ctx.createRadialGradient(obj.x, obj.y, 0, obj.x, obj.y, Math.max(w, h)/2);
+      grad.addColorStop(0, '#000000');
+      grad.addColorStop(0.5, '#110011');
+      grad.addColorStop(1, '#330033');
+      ctx.fillStyle = grad;
+      ctx.fillRect(obj.x - w/2, obj.y - h/2, w, h);
+      ctx.shadowBlur = 10;
+      ctx.shadowColor = '#660066';
+      for (let i = 0; i < 5; i++) {
+        const angle = frameCount * 0.03 + i * Math.PI * 2 / 5;
+        const r = 10 + Math.sin(frameCount * 0.05 + i) * 5;
+        const px = obj.x + Math.cos(angle) * r;
+        const py = obj.y + Math.sin(angle) * r;
+        ctx.globalAlpha = 0.6;
+        ctx.fillStyle = '#993399';
+        ctx.beginPath();
+        ctx.arc(px, py, 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = '#660066';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(obj.x - w/2, obj.y - h/2, w, h);
+      ctx.shadowBlur = 0;
+      if (Math.random() < 0.2) {
+        spawnParticle(obj.x - w/2 + Math.random() * w, obj.y - h/2 + Math.random() * h,
+          (Math.random()-0.5)*0.5, (Math.random()-0.5)*0.5, 25, '#993399', 2, true);
+      }
+      break;
+    }
+    case PU_SHIELD: case PU_MULTI: case PU_FREEZE:
+    case PU_MAGNET: case PU_TIME: case PU_BLAST:
+      drawPowerup(obj);
+      break;
     default:
       drawSphere(obj);
+  }
+
+  // Shield bubble for player
+  if (obj.type === ROCKET && activeEffects.shield > 0) {
+    ctx.globalAlpha = 0.3 + Math.sin(frameCount * 0.2) * 0.1;
+    ctx.strokeStyle = '#00aaff';
+    ctx.lineWidth = 2;
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = '#00aaff';
+    ctx.beginPath();
+    ctx.arc(obj.x, obj.y, obj.radius + 6, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
   }
 
   // Frozen indicator
@@ -1575,9 +2384,14 @@ function draw() {
   // Particles (behind objects)
   drawParticles();
 
-  // Objects
+  // Static elements first (behind everything)
   for (const obj of objects) {
-    drawObject(obj);
+    if (obj.live && isStaticElement(obj.type)) drawObject(obj);
+  }
+
+  // Regular objects
+  for (const obj of objects) {
+    if (obj.live && !isStaticElement(obj.type)) drawObject(obj);
   }
 
   ctx.restore();
@@ -1610,11 +2424,23 @@ function loop(now) {
     updateForces();
     moveObjects();
     collisions();
+    handleWallCollisions();
+    handlePowerupPickup();
+    handleSwitches();
     checkLimits();
     updateGame();
   }
 
+  // Powerup effects and spawning (once per frame, not per physics step)
+  updatePowerupEffects();
+  powerupSpawnTimer--;
+  if (powerupSpawnTimer <= 0 && gameMode !== 'sandbox') {
+    spawnPowerup();
+    powerupSpawnTimer = 600 + Math.random() * 600; // 10-20 seconds
+  }
+
   updateParticles();
+  updateUI();
   draw();
 
   requestAnimationFrame(loop);
@@ -1708,7 +2534,9 @@ function buildLegend() {
   const types = [
     ROCKET, BALL, BBALL, BOMB, SPLIT, GRAV, MAG, SPRING,
     FIELD, SWITCH, GHOST, CHAIN, TIME, MINE, PORTAL, ICE, FIRE, BOSS,
-    HOLE, EHOLE, INSPECTOR, LUNATIC
+    HOLE, EHOLE, INSPECTOR, LUNATIC,
+    WALL, GATE, BOOST, LAVA, ICEZONE, VOID,
+    PU_SHIELD, PU_MULTI, PU_FREEZE, PU_MAGNET, PU_TIME, PU_BLAST
   ];
   for (const type of types) {
     const info = TYPE_INFO[type];
@@ -1749,6 +2577,25 @@ function drawLegendIcon(c, type, info) {
 window.addEventListener('keydown', e => {
   keys[e.key.toLowerCase()] = true;
   if (e.key === ' ') { e.preventDefault(); togglePause(); }
+  // Sandbox spawn shortcuts
+  if (gameMode === 'sandbox' && running && !paused) {
+    const spawnMap = {
+      '1': BALL, '2': BOMB, '3': SPLIT, '4': BBALL, '5': GRAV,
+      '6': MAG, '7': SPRING, '8': GHOST, '9': TIME, '0': MINE
+    };
+    if (spawnMap[e.key]) {
+      creator(spawnMap[e.key]);
+    }
+    if (e.key.toLowerCase() === 'h') creator(HOLE);
+    if (e.key.toLowerCase() === 'e') creator(EHOLE);
+    if (e.key.toLowerCase() === 'p') creator(PORTAL);
+    if (e.key.toLowerCase() === 'c') creator(CHAIN);
+    if (e.key.toLowerCase() === 'f') creator(FIELD);
+    if (e.key.toLowerCase() === 'i') creator(ICE);
+    if (e.key.toLowerCase() === 'r') creator(FIRE);
+    if (e.key.toLowerCase() === 'u') creator(LUNATIC);
+    if (e.key.toLowerCase() === 'n') creator(INSPECTOR);
+  }
 });
 window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
 
