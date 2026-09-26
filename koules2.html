@@ -105,6 +105,8 @@
   .level-intro.hidden { display: none; }
   .level-intro h2 { font-size: 1.8rem; color: var(--accent); text-shadow: 0 0 15px var(--accent); margin-bottom: 0.5rem; }
   .level-intro p { color: var(--text); max-width: 450px; line-height: 1.6; }
+  .level-intro canvas { margin-bottom: 0.5rem; }
+  .intro-badge { background: var(--accent); color: #000; font-weight: bold; font-size: 0.75rem; padding: 0.2rem 0.8rem; border-radius: 999px; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.1em; }
   /* Legend */
   .legend-overlay {
     position: absolute; inset: 0;
@@ -331,6 +333,8 @@
 
   <!-- Level intro -->
   <div class="level-intro hidden" id="levelIntro">
+    <canvas id="introIcon" width="80" height="80" style="display:none"></canvas>
+    <div id="introBadge" class="intro-badge" style="display:none">NEW</div>
     <h2 id="introTitle">Level 1</h2>
     <p id="introText"></p>
   </div>
@@ -1640,28 +1644,40 @@ const SECTORS = [
 ];
 
 const LEVEL_INTROS = {
-  1:  { title: 'Welcome to Koules 2', text: 'New enemies await. Bounce them off the screen to win. Try not to fall off yourself!' },
-  2:  { title: 'Bombs', text: 'BOMB balls explode on impact. Use their shockwaves strategically — but watch for chain reactions!' },
-  3:  { title: 'More Bombs', text: 'Multiple bombs can chain-react. Push a bomb into a cluster for maximum destruction.' },
-  5:  { title: 'Split', text: 'SPLIT balls divide when hit. Each generation is smaller and faster. Don\'t let them overwhelm you!' },
-  7:  { title: 'Spring', text: 'SPRING balls are super bouncy. They\'ll bounce off walls and other objects with near-perfect elasticity.' },
+  1:  { title: 'Welcome to Koules 2', text: 'Bounce enemies off the screen to win. Try not to fall off yourself!' },
+  2:  { title: 'Practice', text: 'More balls to bounce. Get comfortable with the controls!' },
+  4:  { title: 'Mix', text: 'Balls and bombs together. Push bombs into clusters for chain reactions!' },
+  6:  { title: 'Holes', text: 'Black holes destroy anything that touches them — including you!' },
+  8:  { title: 'Mix', text: 'Bombs, splitters, and springs combined. Stay sharp!' },
+  9:  { title: 'Alpha Challenge', text: 'Everything you\'ve learned so far. Don\'t get overwhelmed!' },
   10: { title: 'Sector Alpha Complete', text: 'You\'ve mastered the basics. Sector Beta introduces fields, forces, and switches.' },
-  11: { title: 'Gravity', text: 'GRAVITY balls create gravity wells that pull everything toward them. Use them to redirect enemies.' },
-  13: { title: 'Magnetic', text: 'MAGNETIC balls alternate between attracting and repelling you. Watch their color: blue pulls, red pushes.' },
-  15: { title: 'Fields & Switches', text: 'FIELD balls project force fields. Touch SWITCH balls to toggle them on and off.' },
-  18: { title: 'Switch Puzzles', text: 'Multiple switches can be linked. Figure out the right sequence to clear each level.' },
-  20: { title: 'Sector Beta Complete', text: 'Forces and fields mastered. Sector Gamma brings phasing, time, and elemental balls.' },
-  21: { title: 'Ghost', text: 'GHOST balls phase in and out of solidity. They\'re invulnerable when ghostly — wait for them to materialize!' },
-  23: { title: 'Time', text: 'TIME balls create temporal fields that slow everything inside. Use them strategically.' },
-  25: { title: 'Ice', text: 'ICE balls slide with very low friction and freeze objects on contact. Watch your footing!' },
-  27: { title: 'Fire', text: 'FIRE balls leave damaging trails and accelerate over time. Don\'t let them corner you.' },
+  12: { title: 'Mix', text: 'Gravity wells and bombs. Use gravity to redirect enemies into each other!' },
+  14: { title: 'Mix', text: 'Magnetic fields and gravity. Watch the colors to predict push and pull!' },
+  16: { title: 'Switch Puzzles', text: 'Fields and switches together. Touch switches to toggle force fields!' },
+  18: { title: 'Beta Challenge', text: 'All Sector Beta enemies combined. Use everything you\'ve learned!' },
+  19: { title: 'Beta Challenge', text: 'One more before the sector finale. Don\'t let your guard down!' },
+  20: { title: 'Sector Beta Complete', text: 'Magnetic holes now appear — they pull you in before destroying you. Sector Gamma brings phasing, time, and elemental balls.' },
+  22: { title: 'Mix', text: 'Ghosts and bombs. Wait for ghosts to materialize before striking!' },
+  24: { title: 'Mix', text: 'Time distortion and gravity. Slow fields affect you too — plan carefully!' },
+  26: { title: 'Mix', text: 'Ice and fire. Frozen balls slide, fire balls accelerate. Elemental chaos!' },
+  28: { title: 'Gamma Challenge', text: 'All Sector Gamma enemies combined. Phasing, time, ice, and fire!' },
+  29: { title: 'Gamma Challenge', text: 'One more before the sector finale. Stay focused!' },
   30: { title: 'Sector Gamma Complete', text: 'Elements mastered. Sector Delta brings portals, chains, and mines.' },
-  31: { title: 'Portals', text: 'PORTAL pairs teleport objects. Enter one, exit the other with preserved momentum.' },
-  33: { title: 'Chain', text: 'CHAIN balls are connected by elastic chains. Destroy one to break the chain and send others flying.' },
-  35: { title: 'Mines', text: 'MINE balls are stationary but detonate on proximity. Push them into enemies for explosive results.' },
+  32: { title: 'Mix', text: 'Portals and ghosts. Use portals to escape danger — or send enemies elsewhere!' },
+  34: { title: 'Mix', text: 'Chains and mines. Break chains to send balls flying, push mines into enemies!' },
+  36: { title: 'Delta Challenge', text: 'All Sector Delta enemies combined. Portals, chains, mines, and more!' },
+  37: { title: 'Delta Challenge', text: 'Everything from Sector Delta. Keep moving!' },
+  38: { title: 'Delta Challenge', text: 'The enemies are relentless. Use the environment to your advantage!' },
+  39: { title: 'Delta Challenge', text: 'One more before the final sector. Give it everything you\'ve got!' },
   40: { title: 'Sector Delta Complete', text: 'All mechanics mastered. Sector Omega: the final battle.' },
-  41: { title: 'Boss Battle', text: 'A massive BOSS ball approaches! It has multiple phases and spawns minions. Bounce it off the screen to damage it.' },
+  42: { title: 'Boss Minions', text: 'The boss spawns split balls and bombs. Clear the minions while dodging the boss!' },
+  43: { title: 'Boss Minions', text: 'More minions incoming. Focus on survival while chipping away at the boss!' },
+  44: { title: 'Boss Minions', text: 'The boss is angry. Watch for gravity slams!' },
   45: { title: 'Primary Alarm', text: 'All ball types combined. This is your final test before the ultimate battle.' },
+  46: { title: 'Final Approach', text: 'Everything you\'ve faced, all at once. You\'re almost there!' },
+  47: { title: 'Final Approach', text: 'The universes are counting on you. Don\'t stop now!' },
+  48: { title: 'Final Approach', text: 'One more push. The final battle awaits!' },
+  49: { title: 'Final Approach', text: 'This is it. Everything you\'ve learned, one last time!' },
   50: { title: 'The Final Battle', text: 'Face the ultimate BOSS. All your skills will be needed. Good luck!' },
 };
 
@@ -1672,26 +1688,38 @@ function getSector(level) {
   return SECTORS[0];
 }
 
-function getLevelEnemies(lvl) {
-  // Define which enemy types appear at each level
-  const enemies = [];
-  if (lvl >= 1) enemies.push(BALL);
-  if (lvl >= 2) enemies.push(BOMB);
-  if (lvl >= 5) enemies.push(SPLIT);
-  if (lvl >= 7) enemies.push(SPRING);
-  if (lvl >= 11) enemies.push(GRAV);
-  if (lvl >= 13) enemies.push(MAG);
-  if (lvl >= 15) enemies.push(FIELD, SWITCH);
-  if (lvl >= 21) enemies.push(GHOST);
-  if (lvl >= 23) enemies.push(TIME);
-  if (lvl >= 25) enemies.push(ICE);
-  if (lvl >= 27) enemies.push(FIRE);
-  if (lvl >= 31) enemies.push(PORTAL);
-  if (lvl >= 33) enemies.push(CHAIN);
-  if (lvl >= 35) enemies.push(MINE);
-  if (lvl >= 12) enemies.push(BBALL);
-  if (lvl >= 41) enemies.push(BOSS);
-  return enemies;
+// Progressive campaign: each ball type introduced one at a time
+// type: the ball type, isHole: true for holes (not spawned as enemies)
+const TYPE_INTRODUCTIONS = [
+  { level: 1,  type: BALL },
+  { level: 3,  type: BOMB },
+  { level: 5,  type: SPLIT },
+  { level: 6,  type: HOLE,  isHole: true },
+  { level: 7,  type: SPRING },
+  { level: 11, type: GRAV },
+  { level: 13, type: MAG },
+  { level: 15, type: FIELD },
+  { level: 15, type: SWITCH },
+  { level: 17, type: BBALL },
+  { level: 20, type: EHOLE, isHole: true },
+  { level: 21, type: GHOST },
+  { level: 23, type: TIME },
+  { level: 25, type: ICE },
+  { level: 27, type: FIRE },
+  { level: 31, type: PORTAL },
+  { level: 33, type: CHAIN },
+  { level: 35, type: MINE },
+  { level: 41, type: BOSS },
+];
+
+function getUnlockedEnemyTypes(lvl) {
+  return TYPE_INTRODUCTIONS
+    .filter(t => t.level <= lvl && !t.isHole && t.type !== BOSS)
+    .map(t => t.type);
+}
+
+function getNewIntroduction(lvl) {
+  return TYPE_INTRODUCTIONS.find(t => t.level === lvl) || null;
 }
 
 function initLevel() {
@@ -1706,13 +1734,20 @@ function initLevel() {
   if (level < 25) player.M *= 1.0 + level / 120.0;
   objects.push(player);
 
-  // Spawn initial enemies
-  const enemyTypes = getLevelEnemies(level);
+  // Spawn initial enemies using progressive campaign system
+  const unlocked = getUnlockedEnemyTypes(level);
+  const newIntro = getNewIntroduction(level);
   const enemyCount = Math.min(3 + Math.floor(level / 3), 12);
 
   for (let i = 0; i < enemyCount; i++) {
-    const type = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
-    if (type === BOSS) continue; // boss spawned separately
+    let type;
+    // On introduction levels, spawn 60% of the new type for learning
+    if (newIntro && !newIntro.isHole && newIntro.type !== BOSS &&
+        i < Math.ceil(enemyCount * 0.6)) {
+      type = newIntro.type;
+    } else {
+      type = unlocked[Math.floor(Math.random() * unlocked.length)];
+    }
     creator(type);
   }
 
@@ -1724,10 +1759,14 @@ function initLevel() {
     updateBossBar();
   }
 
-  // Holes start at level 6
+  // Holes start at level 6, magnetic holes at level 20
   if (level >= 6) {
     const holeCount = Math.min(Math.floor((level - 5) / 2), 4);
     for (let i = 0; i < holeCount; i++) creator(HOLE);
+  }
+  if (level >= 20) {
+    const eholeCount = Math.min(Math.floor((level - 19) / 3), 2);
+    for (let i = 0; i < eholeCount; i++) creator(EHOLE);
   }
 
   // Environment elements
@@ -1807,18 +1846,48 @@ function initEnvironment(lvl) {
 
 function showLevelIntro() {
   const intro = LEVEL_INTROS[level];
-  if (intro) {
+  const newIntro = getNewIntroduction(level);
+  const sector = getSector(level);
+  const introIcon = document.getElementById('introIcon');
+  const introBadge = document.getElementById('introBadge');
+
+  // Hide icon and badge by default
+  introIcon.style.display = 'none';
+  introBadge.style.display = 'none';
+
+  let displayTime = 3500;
+
+  if (newIntro) {
+    // New type introduction — show icon + name + description
+    const info = TYPE_INFO[newIntro.type];
+    const ic = introIcon.getContext('2d');
+    ic.clearRect(0, 0, 80, 80);
+    ic.save();
+    ic.translate(40, 40);
+    ic.scale(1.6, 1.6);
+    ic.translate(-24, -24);
+    drawLegendIcon(ic, newIntro.type, info);
+    ic.restore();
+
+    introIcon.style.display = 'block';
+    introBadge.textContent = newIntro.isHole ? 'NEW HAZARD' : 'NEW ENEMY';
+    introBadge.style.display = 'block';
+
+    document.getElementById('introTitle').textContent = info.name;
+    // Use LEVEL_INTROS text if available (has strategic tips), else use TYPE_INFO desc
+    document.getElementById('introText').textContent = intro ? intro.text : info.desc;
+    displayTime = 5000;
+  } else if (intro) {
     document.getElementById('introTitle').textContent = `Level ${level}: ${intro.title}`;
     document.getElementById('introText').textContent = intro.text;
   } else {
-    const sector = getSector(level);
     document.getElementById('introTitle').textContent = `${sector.name} — Level ${level}`;
     document.getElementById('introText').textContent = `${sector.subtitle}: ${countEnemies()} enemies to destroy`;
   }
   levelIntro.classList.remove('hidden');
   setTimeout(() => {
     levelIntro.classList.add('hidden');
-  }, 3500);
+  }, displayTime);
 }
 
 function countEnemies() {
