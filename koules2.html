@@ -427,8 +427,8 @@ const TYPE_INFO = {
   [ICE]:      { name: 'Ice',        color: '#aaddff', dark: '#203040', radius: 10, mass: 3,    desc: 'Slides with low friction. Freezes objects on hit.' },
   [FIRE]:     { name: 'Fire',       color: '#ff6600', dark: '#401500', radius: 10, mass: 3,    desc: 'Leaves a damaging trail. Accelerates over time.' },
   [BOSS]:     { name: 'Boss',       color: '#ff0066', dark: '#400015', radius: 30, mass: 50,   desc: 'Multi-phase boss. Spawns minions, has health bar.' },
-  [HOLE]:     { name: 'Black Hole', color: '#000000', dark: '#000000', radius: 12, mass: 0,    desc: 'Destroys anything that touches it.' },
-  [EHOLE]:    { name: 'Mag. Hole',  color: '#001000', dark: '#000000', radius: 12, mass: 0,    desc: 'Black hole with gravity. Pulls you in.' },
+  [HOLE]:     { name: 'Black Hole', color: '#ff3333', dark: '#330000', radius: 12, mass: 0,    desc: 'Destroys anything that touches it.' },
+  [EHOLE]:    { name: 'Mag. Hole',  color: '#22ff66', dark: '#003300', radius: 12, mass: 0,    desc: 'Black hole with gravity. Pulls you in.' },
   [APPLE]:    { name: 'Apple',      color: '#f8f800', dark: '#404000', radius: 32, mass: 40,   desc: 'Bonus target. Worth big points.' },
   [INSPECTOR]:{ name: 'Inspector',  color: '#f8f8f8', dark: '#404040', radius: 14, mass: 2,    desc: 'Cannot be destroyed directly. Stops on collision.' },
   [LUNATIC]:  { name: 'Lunatic',    color: '#f8f800', dark: '#404000', radius: 6,  mass: 3.14, desc: 'Erratic movement. Attracts player on collision.' },
@@ -2735,6 +2735,35 @@ function buildLegend() {
 
 function drawLegendIcon(c, type, info) {
   const cx = 24, cy = 24, r = Math.min(info.radius, 16);
+
+  // Holes need special rendering — they're black on black otherwise
+  if (type === HOLE || type === EHOLE) {
+    const isEHOLE = type === EHOLE;
+    const ringColor = isEHOLE ? '#22ff66' : '#ff3333';
+    // Outer glow ring
+    c.shadowBlur = 12;
+    c.shadowColor = ringColor;
+    c.strokeStyle = ringColor;
+    c.lineWidth = 3;
+    c.beginPath();
+    c.arc(cx, cy, r + 4, 0, Math.PI * 2);
+    c.stroke();
+    // Inner ring
+    c.lineWidth = 2;
+    c.globalAlpha = 0.8;
+    c.beginPath();
+    c.arc(cx, cy, r, 0, Math.PI * 2);
+    c.stroke();
+    c.globalAlpha = 1;
+    c.shadowBlur = 0;
+    // Dark center
+    c.fillStyle = '#000000';
+    c.beginPath();
+    c.arc(cx, cy, r - 2, 0, Math.PI * 2);
+    c.fill();
+    return;
+  }
+
   c.shadowBlur = 8;
   c.shadowColor = info.color;
   const grad = c.createRadialGradient(cx + r * 0.25, cy - r * 0.25, 0, cx, cy, r);
