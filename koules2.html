@@ -2129,43 +2129,58 @@ function drawCreator(obj) {
 }
 
 function drawHole(obj, isEHOLE) {
-  const r = obj.radius + 6;
-  const ringColor = isEHOLE ? '#22c55e' : '#ef4444';
+  const r = obj.radius + 8;
+  const ringColor = isEHOLE ? '#22ff66' : '#ff3333';
+  const pulse = Math.sin(frameCount * 0.1) * 0.15 + 0.85;
 
-  // Outer glow ring
+  // Pulsing outer glow
   ctx.save();
-  ctx.shadowBlur = 20;
+  ctx.shadowBlur = 25;
   ctx.shadowColor = ringColor;
+  ctx.globalAlpha = pulse;
   ctx.strokeStyle = ringColor;
-  ctx.lineWidth = 3;
+  ctx.lineWidth = 4;
   ctx.beginPath();
   ctx.arc(obj.x, obj.y, r, 0, Math.PI * 2);
   ctx.stroke();
   ctx.restore();
 
-  // Swirling accretion ring
+  // Bright inner ring
   ctx.save();
+  ctx.shadowBlur = 10;
+  ctx.shadowColor = ringColor;
   ctx.strokeStyle = ringColor;
   ctx.lineWidth = 2;
-  ctx.globalAlpha = 0.7;
+  ctx.globalAlpha = 0.9;
+  ctx.beginPath();
+  ctx.arc(obj.x, obj.y, r - 3, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+
+  // Swirling accretion arcs
+  ctx.save();
+  ctx.strokeStyle = ringColor;
+  ctx.lineWidth = 2.5;
+  ctx.globalAlpha = 0.8;
   const rot = frameCount * 0.08;
-  for (let i = 0; i < 3; i++) {
-    const ringR = r - 3 - i * 4;
+  for (let i = 0; i < 4; i++) {
+    const ringR = r - 6 - i * 3;
     if (ringR < 3) break;
     ctx.beginPath();
-    ctx.arc(obj.x, obj.y, ringR, rot + i * 0.8, rot + i * 0.8 + Math.PI * 1.4);
+    ctx.arc(obj.x, obj.y, ringR, rot + i * 0.6, rot + i * 0.6 + Math.PI * 1.2);
     ctx.stroke();
   }
   ctx.restore();
 
-  // Dark center
-  const grad = ctx.createRadialGradient(obj.x, obj.y, 0, obj.x, obj.y, r - 5);
+  // Dark center with colored edge
+  const grad = ctx.createRadialGradient(obj.x, obj.y, 0, obj.x, obj.y, r - 7);
   grad.addColorStop(0, '#000000');
-  grad.addColorStop(0.6, '#000000');
-  grad.addColorStop(1, isEHOLE ? 'rgba(0,60,0,0.9)' : 'rgba(60,0,0,0.9)');
+  grad.addColorStop(0.5, '#000000');
+  grad.addColorStop(0.85, isEHOLE ? '#003300' : '#330000');
+  grad.addColorStop(1, isEHOLE ? '#006600' : '#660000');
   ctx.fillStyle = grad;
   ctx.beginPath();
-  ctx.arc(obj.x, obj.y, r - 5, 0, Math.PI * 2);
+  ctx.arc(obj.x, obj.y, r - 7, 0, Math.PI * 2);
   ctx.fill();
 }
 
