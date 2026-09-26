@@ -2849,7 +2849,7 @@ function endCrawl() {
 crawlSkip.addEventListener('click', endCrawl);
 
 // JS-driven crawl: scroll until last line leaves the top
-const crawlDuration = 70000; // 70s, matching original Koules
+const crawlDuration = 140000; // 140s — more text than original, so longer scroll
 const crawlStart = performance.now();
 const crawlLastChild = crawlContent.lastElementChild;
 
