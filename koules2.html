@@ -172,9 +172,112 @@
   .mode-card:nth-child(4) { animation-delay: 1.5s; }
   .level-intro h2 { animation: fadeInUp 0.4s ease-out; }
   .level-intro p { animation: fadeInUp 0.4s ease-out 0.15s backwards; }
+
+  /* Star Wars intro crawl */
+  .crawl-overlay {
+    position: fixed;
+    inset: 0;
+    background: #000;
+    overflow: hidden;
+    z-index: 200;
+    transition: opacity 0.8s;
+  }
+  .crawl-overlay.fade-out { opacity: 0; pointer-events: none; }
+  .crawl-overlay.fade-in { opacity: 0; animation: crawlFadeIn 1s ease forwards; }
+  @keyframes crawlFadeIn { to { opacity: 1; } }
+  .crawl-perspective {
+    position: absolute;
+    inset: 0;
+    perspective: 400px;
+    perspective-origin: 50% 100%;
+    overflow: hidden;
+    -webkit-mask-image: linear-gradient(to top, black 0%, black 40%, transparent 90%);
+    mask-image: linear-gradient(to top, black 0%, black 40%, transparent 90%);
+  }
+  .crawl-content {
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    width: 80%;
+    max-width: 600px;
+    text-align: center;
+    color: #ffe81f;
+    font-family: "Courier New", monospace;
+    transform: translateX(-50%) rotateX(25deg);
+    transform-origin: 50% 100%;
+    will-change: transform;
+  }
+  .crawl-content h1 {
+    font-size: 7vw;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    letter-spacing: 0.1em;
+  }
+  .crawl-content h2 {
+    font-size: 4vw;
+    font-weight: 400;
+    margin-bottom: 2rem;
+    letter-spacing: 0.05em;
+  }
+  .crawl-content h3 {
+    font-size: 4.5vw;
+    font-weight: 700;
+    margin-top: 1.5rem;
+    margin-bottom: 0.5rem;
+    letter-spacing: 0.05em;
+  }
+  .crawl-content p {
+    font-size: 3.5vw;
+    line-height: 1.8;
+    margin-bottom: 0.8rem;
+  }
+  .crawl-skip {
+    position: absolute;
+    bottom: 1rem;
+    right: 1.5rem;
+    color: #475569;
+    font-size: 0.75rem;
+    cursor: pointer;
+    z-index: 201;
+    font-family: sans-serif;
+  }
+  .crawl-skip:hover { color: #cbd5e1; }
+  @media (min-width: 768px) {
+    .crawl-content h1 { font-size: 3.5rem; }
+    .crawl-content h2 { font-size: 2rem; }
+    .crawl-content h3 { font-size: 2.2rem; }
+    .crawl-content p { font-size: 1.5rem; }
+  }
 </style>
 </head>
 <body>
+
+<!-- Star Wars intro crawl -->
+<div class="crawl-overlay fade-in" id="crawlOverlay">
+  <div class="crawl-perspective">
+    <div class="crawl-content" id="crawlContent">
+      <h1>KOULES II</h1>
+      <h2>The Next Generation</h2>
+      <p>The DARK APPLEPOLISHER has fallen.</p>
+      <p>But his death tore open the very fabric of reality, scattering the KOULES civilization across four shattered universes.</p>
+      <p>Each universe bends the laws of physics in terrifying new ways.</p>
+      <h3>UNIVERSE ALPHA</h3>
+      <p>Where bombs detonate in chain reactions and living cells split without end.</p>
+      <h3>UNIVERSE BETA</h3>
+      <p>Where gravity wells devour all light, and magnetic storms tear stars from their orbits.</p>
+      <h3>UNIVERSE GAMMA</h3>
+      <p>Where time itself freezes and burns, and ghostly phantoms phase between dimensions.</p>
+      <h3>UNIVERSE DELTA</h3>
+      <p>Where portals twist space into knots, and chains of destruction swing through the void.</p>
+      <p>But in the darkness beyond, something ancient stirs. A new threat, born from the ashes of the old, gathers its forces in SECTOR OMEGA.</p>
+      <p>You are the last yellow rocket. The only one who survived the cataclysm.</p>
+      <p>Four universes cry out for a hero.</p>
+      <p>The KOULES need you. Again.</p>
+    </div>
+  </div>
+  <div class="crawl-skip" id="crawlSkip">skip &raquo;</div>
+</div>
+
 <div class="app" id="app">
   <canvas id="game"></canvas>
 
@@ -207,7 +310,7 @@
   </div>
 
   <!-- Main menu overlay -->
-  <div class="overlay" id="menuOverlay">
+  <div class="overlay hidden" id="menuOverlay">
     <h1>KOULES 2</h1>
     <h2>The Next Generation</h2>
     <p>Explosive, magnetic, gravitational — 15 new physics ball types await. Inspired by the 1995 classic by Jan Hubička.</p>
@@ -2731,6 +2834,46 @@ best = parseInt(localStorage.getItem('koules2Best') || '0', 10);
 
 // Draw initial background
 draw();
+
+// ============================================================
+// STAR WARS INTRO CRAWL
+// ============================================================
+const crawlOverlay = document.getElementById('crawlOverlay');
+const crawlContent = document.getElementById('crawlContent');
+const crawlSkip = document.getElementById('crawlSkip');
+let crawlEnded = false;
+
+function endCrawl() {
+  if (crawlEnded) return;
+  crawlEnded = true;
+  crawlOverlay.classList.add('fade-out');
+  setTimeout(() => {
+    crawlOverlay.style.display = 'none';
+    menuOverlay.classList.remove('hidden');
+  }, 800);
+}
+
+crawlSkip.addEventListener('click', endCrawl);
+
+// JS-driven crawl: scroll until last line leaves the top
+const crawlDuration = 30000; // 30 seconds
+const crawlStart = performance.now();
+const crawlLastChild = crawlContent.lastElementChild;
+
+function crawlFrame(now) {
+  if (crawlEnded) return;
+  const elapsed = now - crawlStart;
+  const progress = Math.min(elapsed / crawlDuration, 1);
+  crawlContent.style.transform =
+    `translateX(-50%) rotateX(25deg) translateY(${-800 * progress}%)`;
+  const rect = crawlLastChild.getBoundingClientRect();
+  if (rect.bottom < 0 || progress >= 1) {
+    endCrawl();
+    return;
+  }
+  requestAnimationFrame(crawlFrame);
+}
+requestAnimationFrame(crawlFrame);
 </script>
 </body>
 </html>
