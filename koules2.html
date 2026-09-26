@@ -1823,9 +1823,12 @@ function showLevelIntro() {
 
 function countEnemies() {
   return objects.filter(o => o.live && o.type !== ROCKET && o.type !== HOLE &&
-    o.type !== EHOLE && o.type !== CREATOR && o.type !== APPLE &&
+    o.type !== EHOLE && o.type !== APPLE &&
     !isStaticElement(o.type) && !isPowerup(o.type) &&
-    !(o.type === SWITCH && o.data.environment)).length;
+    !(o.type === SWITCH && o.data.environment) &&
+    !(o.type === CREATOR && (o.ctype === HOLE || o.ctype === EHOLE ||
+      isStaticElement(o.ctype) || isPowerup(o.ctype) ||
+      (o.ctype === SWITCH && o.data.environment)))).length;
 }
 
 function countByType(type) {
