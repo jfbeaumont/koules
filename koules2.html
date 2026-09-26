@@ -156,6 +156,22 @@
     .mode-grid { grid-template-columns: 1fr; }
   }
   .hint { font-size: 0.7rem; color: var(--muted); text-align: center; padding: 0.3rem; }
+  /* Menu animations */
+  @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes glowPulse { 0%, 100% { filter: drop-shadow(0 0 20px rgba(0,224,255,0.4)); } 50% { filter: drop-shadow(0 0 35px rgba(0,224,255,0.7)); } }
+  @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+  .overlay h1 { animation: fadeInUp 0.6s ease-out, glowPulse 3s ease-in-out infinite 0.6s; }
+  .overlay h2 { animation: fadeInUp 0.6s ease-out 0.15s backwards; }
+  .overlay p { animation: fadeInUp 0.6s ease-out 0.3s backwards; }
+  .overlay .mode-grid { animation: fadeInUp 0.6s ease-out 0.45s backwards; }
+  .overlay .btn-row { animation: fadeInUp 0.6s ease-out 0.45s backwards; }
+  .overlay .hint { animation: fadeInUp 0.6s ease-out 0.6s backwards; }
+  .mode-card { animation: float 4s ease-in-out infinite; }
+  .mode-card:nth-child(2) { animation-delay: 0.5s; }
+  .mode-card:nth-child(3) { animation-delay: 1s; }
+  .mode-card:nth-child(4) { animation-delay: 1.5s; }
+  .level-intro h2 { animation: fadeInUp 0.4s ease-out; }
+  .level-intro p { animation: fadeInUp 0.4s ease-out 0.15s backwards; }
 </style>
 </head>
 <body>
@@ -173,6 +189,7 @@
     <div class="hud-section" id="hudPowerups"></div>
     <div class="hud-section">
       <button class="hud-btn" id="hudPause">Pause</button>
+      <button class="hud-btn" id="hudSound">🔊</button>
       <button class="hud-btn" id="hudLegend">?</button>
       <button class="hud-btn" id="hudExit">Menu</button>
     </div>
@@ -1726,7 +1743,7 @@ function updateGame() {
   if (gameMode === 'survival') {
     survivalTimer++;
     survivalSpawnTimer--;
-    survivalDifficulty = 1 + survivalTimer / 1800; // ramps up over 30s
+    survivalDifficulty = 1 + survivalTimer / 750; // ramps up over ~30s at 25fps
 
     // Score increases over time
     if (frameCount % 60 === 0) score += Math.floor(survivalDifficulty);
@@ -1895,7 +1912,7 @@ function gameOver(won) {
     document.getElementById('gameOverText').textContent = `You conquered Koules 2! Final score: ${score}`;
   } else if (gameMode === 'survival') {
     document.getElementById('gameOverTitle').textContent = 'Survival Ended';
-    const secs = Math.floor(survivalTimer / 60);
+    const secs = Math.floor(survivalTimer / 25);
     document.getElementById('gameOverText').textContent = `You survived ${secs}s with score ${score}. Difficulty: ${survivalDifficulty.toFixed(1)}x`;
   } else {
     document.getElementById('gameOverTitle').textContent = 'Game Over';
@@ -1941,7 +1958,7 @@ function updateUI() {
       taVal.textContent = elapsed.toFixed(1) + 's';
       taItem.style.display = 'inline-flex';
     } else if (gameMode === 'survival' && running) {
-      taVal.textContent = Math.floor(survivalTimer / 60) + 's';
+      taVal.textContent = Math.floor(survivalTimer / 25) + 's';
       taItem.style.display = 'inline-flex';
     } else {
       taItem.style.display = 'none';
@@ -2394,6 +2411,16 @@ function draw() {
     if (obj.live && !isStaticElement(obj.type)) drawObject(obj);
   }
 
+  // Bloom: draw glowing objects again with low alpha + blur for bloom effect
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.globalAlpha = 0.15;
+  ctx.filter = 'blur(8px)';
+  for (const obj of objects) {
+    if (obj.live && !isStaticElement(obj.type)) drawObject(obj);
+  }
+  ctx.restore();
+
   ctx.restore();
 
   // Screen flash
@@ -2412,15 +2439,19 @@ function draw() {
 // ============================================================
 // GAME LOOP
 // ============================================================
+let physicsAccumulator = 0;
+const PHYSICS_STEP_MS = 1000 / 25; // 25fps physics like original Koules
+
 function loop(now) {
   if (!running || paused) return;
   const dt = Math.min(now - lastTime, 50);
   lastTime = now;
   frameCount++;
 
-  // Fixed timestep physics (25fps like original, but render every frame)
-  const physicsSteps = Math.max(1, Math.round(dt / (1000 / 25)));
-  for (let i = 0; i < physicsSteps; i++) {
+  // Fixed timestep physics (25fps like original, render every frame)
+  physicsAccumulator += dt;
+  let steps = 0;
+  while (physicsAccumulator >= PHYSICS_STEP_MS && steps < 4) {
     updateForces();
     moveObjects();
     collisions();
@@ -2429,6 +2460,8 @@ function loop(now) {
     handleSwitches();
     checkLimits();
     updateGame();
+    physicsAccumulator -= PHYSICS_STEP_MS;
+    steps++;
   }
 
   // Powerup effects and spawning (once per frame, not per physics step)
@@ -2662,6 +2695,10 @@ document.getElementById('menuBtn').addEventListener('click', () => {
 });
 
 document.getElementById('hudPause').addEventListener('click', togglePause);
+document.getElementById('hudSound').addEventListener('click', () => {
+  soundEnabled = !soundEnabled;
+  document.getElementById('hudSound').textContent = soundEnabled ? '🔊' : '🔇';
+});
 document.getElementById('hudExit').addEventListener('click', () => {
   running = false;
   hud.style.display = 'none';
