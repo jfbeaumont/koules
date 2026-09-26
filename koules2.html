@@ -2665,33 +2665,37 @@ function loop(now) {
   lastTime = now;
   frameCount++;
 
-  // Fixed timestep physics (25fps like original, render every frame)
-  physicsAccumulator += dt;
-  let steps = 0;
-  while (physicsAccumulator >= PHYSICS_STEP_MS && steps < 4) {
-    updateForces();
-    moveObjects();
-    collisions();
-    handleWallCollisions();
-    handlePowerupPickup();
-    handleSwitches();
-    checkLimits();
-    updateGame();
-    physicsAccumulator -= PHYSICS_STEP_MS;
-    steps++;
-  }
+  try {
+    // Fixed timestep physics (25fps like original, render every frame)
+    physicsAccumulator += dt;
+    let steps = 0;
+    while (physicsAccumulator >= PHYSICS_STEP_MS && steps < 4) {
+      updateForces();
+      moveObjects();
+      collisions();
+      handleWallCollisions();
+      handlePowerupPickup();
+      handleSwitches();
+      checkLimits();
+      updateGame();
+      physicsAccumulator -= PHYSICS_STEP_MS;
+      steps++;
+    }
 
-  // Powerup effects and spawning (once per frame, not per physics step)
-  updatePowerupEffects();
-  powerupSpawnTimer--;
-  if (powerupSpawnTimer <= 0 && gameMode !== 'sandbox') {
-    spawnPowerup();
-    powerupSpawnTimer = 600 + Math.random() * 600; // 10-20 seconds
-  }
+    // Powerup effects and spawning (once per frame, not per physics step)
+    updatePowerupEffects();
+    powerupSpawnTimer--;
+    if (powerupSpawnTimer <= 0 && gameMode !== 'sandbox') {
+      spawnPowerup();
+      powerupSpawnTimer = 600 + Math.random() * 600; // 10-20 seconds
+    }
 
-  updateParticles();
-  updateUI();
-  draw();
+    updateParticles();
+    updateUI();
+    draw();
+  } catch(e) {
+    console.error('Game loop error:', e);
+  }
 
   requestAnimationFrame(loop);
 }
