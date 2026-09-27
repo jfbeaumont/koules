@@ -1082,14 +1082,14 @@ function updateForces() {
           }
         } else if (zone.type === VOID) {
           if (circleRectOverlap(obj.x, obj.y, obj.radius, zone.x, zone.y, zone.data.w, zone.data.h)) {
-            if (!(obj.type === ROCKET && activeEffects.shield > 0)) {
+            if (obj.type === ROCKET) {
+              if (activeEffects.shield <= 0) {
+                spawnExplosion(obj.x, obj.y, 10, '#660066');
+                killPlayer(obj);
+              }
+            } else {
               destroyObject(obj);
               spawnExplosion(obj.x, obj.y, 10, '#660066');
-              if (obj.type === ROCKET) {
-                lives--;
-                updateUI();
-                if (lives <= 0) { gameOver(false); return; }
-              }
             }
           }
         }
@@ -1188,20 +1188,24 @@ function collisions() {
 
         // HOLE: destroy on contact
         if (a.type === HOLE) {
-          if (b.type !== APPLE && b.type !== HOLE) { destroyObject(b); }
+          if (b.type === ROCKET) { killPlayer(b); }
+          else if (b.type !== APPLE && b.type !== HOLE) { destroyObject(b); }
           continue;
         }
         if (b.type === HOLE) {
-          if (a.type !== APPLE && a.type !== HOLE) { destroyObject(a); }
+          if (a.type === ROCKET) { killPlayer(a); }
+          else if (a.type !== APPLE && a.type !== HOLE) { destroyObject(a); }
           continue;
         }
         // EHOLE: destroy + self-destruct
         if (a.type === EHOLE) {
-          if (b.type !== APPLE) { destroyObject(b); destroyObject(a); }
+          if (b.type === ROCKET) { killPlayer(b); destroyObject(a); }
+          else if (b.type !== APPLE) { destroyObject(b); destroyObject(a); }
           continue;
         }
         if (b.type === EHOLE) {
-          if (a.type !== APPLE) { destroyObject(a); destroyObject(b); }
+          if (a.type === ROCKET) { killPlayer(a); destroyObject(b); }
+          else if (a.type !== APPLE) { destroyObject(a); destroyObject(b); }
           continue;
         }
 
@@ -1335,6 +1339,27 @@ function splitBall(obj) {
   child.fy = -obj.fy * 0.5 + Math.random() * 2;
   objects.push(child);
   spawnExplosion(obj.x, obj.y, 8, '#00ff66', 1);
+}
+
+function killPlayer(obj) {
+  lives--;
+  updateUI();
+  if (lives <= 0) {
+    destroyObject(obj);
+    gameOver(false);
+    return;
+  }
+  obj.x = ARENA_W / 2;
+  obj.y = ARENA_H / 2;
+  obj.fx = 0;
+  obj.fy = 0;
+  obj.time = 100;
+  obj.lives = 5;
+  obj.M = ROCKETM;
+  obj.accel = ROCKET_SPEED;
+  obj.data.lavaDamage = 0;
+  flash('#ff3333', 0.4);
+  spawnExplosion(obj.x, obj.y, 12, '#ffaa00');
 }
 
 function destroyObject(obj, silent) {
