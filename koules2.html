@@ -1972,7 +1972,7 @@ function updateGame() {
 
     // Dynamic spawning
     if (gtime < 0) {
-      const enemyTypes = getLevelEnemies(level).filter(t => t !== BOSS);
+      const enemyTypes = getUnlockedEnemyTypes(level);
       if (enemyTypes.length > 0 && countEnemies() < 4 + Math.floor(level / 5) &&
           Math.random() < 1 / (200 + (50 - level))) {
         const type = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
